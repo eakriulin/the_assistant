@@ -1,16 +1,17 @@
 import torch
 import torch.utils.data
 import os
+from hyperparameters import HYPERPARAMETERS
 from src.NeuralNetwork import NeuralNetwork
 from src.TextPreprocessor import TextPreprocessor
 
 class NextTokenPredictor:
     def __init__(self, neural_network: NeuralNetwork) -> None:
         self.STATE_FILENAME = os.path.join('best_state.pth')
-        self.MAX_AUTOCOMPLETIONS_COUNT = 16
 
         self.neural_network = neural_network
-        self.end_of_sequence_token = ';'
+        self.max_autocompletions_count = HYPERPARAMETERS['SEQUENCE_LENGTH']
+        self.temperature = HYPERPARAMETERS['TEMPERATURE']
 
     def save(self) -> None:
         torch.save(self.neural_network.state_dict(), self.STATE_FILENAME)
@@ -23,6 +24,7 @@ class NextTokenPredictor:
         optimizer = torch.optim.Adam(self.neural_network.parameters(), learning_rate)
 
         best_val_perplexity = float('inf')
+        best_epoch = 0
 
         for e in range(0, number_of_epochs):
             epoch_loss = 0
@@ -54,15 +56,16 @@ class NextTokenPredictor:
             epoch_val_perplexity, epoch_val_accuracy = self.eval(val_set)
             if epoch_val_perplexity < best_val_perplexity:
                 best_val_perplexity = epoch_val_perplexity
+                best_epoch = e
                 self.save()
 
             epoch_loss /= epoch_number_of_examples
             epoch_perplexity = self._calculate_perplexity(torch.tensor(epoch_loss))
             epoch_accuracy /= epoch_number_of_examples
 
-            print(f'\nepoch {e + 1} — train loss: {epoch_loss}, train perplexity: {epoch_perplexity}, train accuracy {epoch_accuracy}, val perplexity: {epoch_val_perplexity}, val accuracy {epoch_val_accuracy} | BEST val perplexity {best_val_perplexity}\n')
+            print(f'\nepoch {e + 1} — train loss: {epoch_loss}, train perplexity: {epoch_perplexity}, train accuracy {epoch_accuracy}, val perplexity: {epoch_val_perplexity}, val accuracy {epoch_val_accuracy} | BEST val perplexity {best_val_perplexity}, epoch {best_epoch + 1}\n')
 
-    def eval(self, val_set: torch.utils.data.DataLoader) -> float:
+    def eval(self, val_set: torch.utils.data.DataLoader) -> tuple[float, float]:
         with torch.no_grad():
             has_been_in_train_mode = self.neural_network.training
             self.neural_network.eval()
@@ -99,20 +102,26 @@ class NextTokenPredictor:
             tokens = TextPreprocessor.tokenize(text)
 
             next_token_idx = -1
-            autocompletions_count = 0
+            number_of_autocompletions = 0
 
-            while next_token_idx != self.neural_network.vocabulary[self.end_of_sequence_token] and autocompletions_count < self.MAX_AUTOCOMPLETIONS_COUNT:
-                input, length = self.neural_network.vocabulary.vectorize(tokens)
+            while number_of_autocompletions < self.max_autocompletions_count:
+                current_tokens = tokens[-HYPERPARAMETERS['SEQUENCE_LENGTH']:]
+                input, length = self.neural_network.vocabulary.vectorize(current_tokens)
 
                 input = input.reshape(1, input.shape[0])
                 length = length.reshape(1, length.shape[0])
 
                 predictions = self.neural_network.forward(input, length)
-                next_token_idx = int(self._extract_predictions(predictions))
-                next_token = self.neural_network.vocabulary.get_word(next_token_idx)
 
+                next_token_idx = int(self._sample_predictions(predictions))
+                next_token = self.neural_network.vocabulary.get_word(next_token_idx)
+                
                 tokens.append(next_token)
-                autocompletions_count += 1
+
+                if next_token == self.neural_network.vocabulary.end_of_sequence_token:
+                    break
+
+                number_of_autocompletions += 1
 
             return " ".join(tokens)
 
@@ -127,6 +136,11 @@ class NextTokenPredictor:
         return torch.mean(correct_predictions).item() * 100
     
     def _extract_predictions(self, As: torch.Tensor) -> torch.Tensor:
-        probability_distributions = torch.nn.functional.softmax(As, dim=2)
-        return torch.argmax(probability_distributions, dim=2)
-    
+        probabilities = torch.nn.functional.softmax(As, dim=2)
+        return torch.argmax(probabilities, dim=2)
+
+    def _sample_predictions(self, As: torch.Tensor) -> torch.Tensor:
+        scaled_predictions = As / self.temperature
+        probabilities = torch.nn.functional.softmax(scaled_predictions, dim=2).squeeze()
+        return torch.multinomial(probabilities, num_samples=1, replacement=True)
+
