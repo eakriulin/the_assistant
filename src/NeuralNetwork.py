@@ -18,13 +18,13 @@ class NeuralNetwork(torch.nn.Module):
     def forward(self, inputs: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
         minibatch_size = len(inputs)
 
-        embedded_inputs = self.embedding.forward(inputs) # (minibatch_size, sequence_length, embedding_size)
-        encoded_inputs, _ = self.lstm.forward(embedded_inputs, self.initialize_hidden_and_cell_states(minibatch_size)) # (minibatch_size, sequence_length, lstm_hidden_state_size)
+        embedded_inputs = self.embedding.forward(inputs) # note: (minibatch_size, sequence_length, embedding_size)
+        encoded_inputs, _ = self.lstm.forward(embedded_inputs, self.initialize_hidden_and_cell_states(minibatch_size)) # note: (minibatch_size, sequence_length, lstm_hidden_state_size)
 
         indices_of_last_tokens = lengths - 1
         indices_of_last_tokens = indices_of_last_tokens.view(minibatch_size, 1, 1).repeat(1, 1, self.lstm_hidden_state_size)
 
-        encoded_inputs = torch.gather(encoded_inputs, 1, indices_of_last_tokens) # (minibatch_size, 1, lstm_hidden_state_size)
+        encoded_inputs = torch.gather(encoded_inputs, 1, indices_of_last_tokens) # note: (minibatch_size, 1, lstm_hidden_state_size)
         return self.linear.forward(encoded_inputs)
 
     def initialize_hidden_and_cell_states(self, minibatch_size: int) -> tuple[torch.Tensor, torch.Tensor]:

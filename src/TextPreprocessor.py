@@ -48,7 +48,8 @@ class TextPreprocessor:
             if re.match(TextPreprocessor.RE_NAME, char):
                 current_name_chars.append(char)
                 continue
-
+            
+            # note: processing a floating point number, e.g., 3.14
             next_char = text[i + 1] if i + 1 < text_length else None
             if char == '.' and next_char and re.match(TextPreprocessor.RE_NUMBER, next_char):
                 current_name_chars.append(char)
@@ -62,6 +63,7 @@ class TextPreprocessor:
                 tokens.append("".join(current_name_chars))
                 current_name_chars = []
 
+            # note: not interested in spaces and linebreaks
             if re.match(TextPreprocessor.RE_SPACES_AND_LINEBREAKS, char):
                 continue
 
