@@ -48,15 +48,54 @@ Example
 python3 main.py --train --test --demonstrate
 ```
 
+## Dataset
+
+[lgrthms](https://github.com/eakriulin/lgrthms) — my own open source library of algorithms and data structures written in TypeScript. Its source code was used to test the implementation of the model and measure the results. Any other TypeScript code files can be used to train the model from scratch and use it further for code autocompletion.
+
+The source code files of the [lgrthms](https://github.com/eakriulin/lgrthms) library are included to this repository inside the `dataset` folder. 80% of the files went to the train set, another 20% are split between the validation and test sets.
+
 ## Modules
+
+### main.py
+
+Entry point of the project.
+
+### hyperparameters.py
+
+Holds hyperparameters of the model. The values can be adjusted at will.
 
 ### TextPreprocessor
 
 Implements pre-processing and tokenization of the given piece of code. Since the dataset is expected to be small, variable, function, method and class names are normalized so it's easier for the neural network to see the regularities. To simplify the processing, a given piece of code gets represented as a tree using an external library. Then, a set of regular expressions is applied to format and tokenize the code.
 
+```ts
+// original
+function breadthFirstSearch<T>(nodeId: string, graph: Graph<T>, predicate: (value: T) => unknown): string | undefined {
+    return bfs(nodeId, graph, predicate);
+}
+
+// normalized
+function _function_<T>(_variable0_: string, _variable1_: Graph<T>, _variable2_: (_variable3_: T) => unknown): string | undefined {
+    return bfs(_variable0_, _variable1_, _variable2_);
+}
+
+// tokenized
+['function', '_function_', '<', 'T', '>', '(', '_variable0_', ':', 'string', ',', '_variable1_', ':', 'Graph', ...]
+```
+
 ### Data
 
-Reads the files provided in the dataset folder, extracts input sequences and their corresponding targets and stores them in memory.
+Reads the files provided in the dataset folder, extracts input sequences and their corresponding target tokens and stores them in memory.
+
+```ts
+// tokenized
+['function', '_function_', '<', 'T', '>', '(', '_variable0_', ':', 'string', ',', '_variable1_', ':', 'Graph', ...]
+
+// input sequence -> target token
+['function', '_function_', '<', 'T', '>', '(', '_variable0_', ':'] -> 'string'
+['_function_', '<', 'T', '>', '(', '_variable0_', ':', 'string']   -> ','
+...
+```
 
 ### Vocabulary
 
